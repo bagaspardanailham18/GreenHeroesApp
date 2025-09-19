@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "295877425876",
+    "project_id": "greenheroesapp",
+    "storage_bucket": "greenheroesapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:295877425876:android:19be269fd2a53accc2d941",
+        "android_client_info": {
+          "package_name": "com.bagaspardanailham.greenheroesapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmK96fOdQhsnaZe9EcknICHCzRsTE8n90"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

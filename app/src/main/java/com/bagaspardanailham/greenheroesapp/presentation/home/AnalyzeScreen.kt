@@ -1,7 +1,14 @@
 package com.bagaspardanailham.greenheroesapp.presentation.home
 
+import android.R.attr.bitmap
 import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.animateFloat
@@ -16,19 +23,28 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Button
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Divider
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetState
 import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowCircleLeft
@@ -46,7 +62,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,9 +72,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,25 +85,50 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.constraintlayout.compose.ConstraintLayout
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bagaspardanailham.greenheroesapp.R
 import com.bagaspardanailham.greenheroesapp.data.model.AnalyzeCategoryItem
 import com.bagaspardanailham.greenheroesapp.data.model.analyzeCategoryItems
 import com.bagaspardanailham.greenheroesapp.presentation.AnalyzeCategoryItemDataState
+import com.bagaspardanailham.greenheroesapp.presentation.UiState
+import com.bagaspardanailham.greenheroesapp.presentation.vm.AnalyzeVM
+import com.bagaspardanailham.greenheroesapp.presentation.vm.DiseaseResult
+import com.bagaspardanailham.greenheroesapp.ui.theme.poppins_bold
 import com.bagaspardanailham.greenheroesapp.ui.theme.poppins_medium
 import com.bagaspardanailham.greenheroesapp.ui.theme.poppins_regular
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun AnalyzeScreen(controller: LifecycleCameraController) {
+fun AnalyzeScreen(
+    controller: LifecycleCameraController,
+    viewModel: AnalyzeVM = koinViewModel()
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val modalSheetState = rememberModalBottomSheetState(
         initialValue = ModalBottomSheetValue.Hidden,
         confirmValueChange = { it != ModalBottomSheetValue.HalfExpanded },
         skipHalfExpanded = true
     )
+
+    var currentBottomSheetContent: (@Composable () -> Unit)? by remember { mutableStateOf(null) }
+
+    key(modalSheetState.currentValue) {
+        if (modalSheetState.currentValue == ModalBottomSheetValue.Hidden) {
+            currentBottomSheetContent = null
+        }
+    }
 
     BackHandler(modalSheetState.isVisible) {
         coroutineScope.launch { modalSheetState.hide() }
@@ -93,56 +138,14 @@ fun AnalyzeScreen(controller: LifecycleCameraController) {
         sheetState = modalSheetState,
         sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         sheetContent = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(26.dp)
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Analyze For",
-                        fontFamily = poppins_medium,
-                        fontSize = 20.sp,
-                        color = Color.Black
-                    )
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        tint = Color.Black,
-                        contentDescription = "Close Icon",
-                        modifier = Modifier
-                            .clickable {
-                                coroutineScope.launch {
-                                    modalSheetState.hide()
-                                }
-                            }
-                    )
-                }
-
-                val analyzeCatDataState = remember {
-                    AnalyzeCategoryItemDataState()
-                }
-                analyzeCatDataState.setAnalyzeCatList(analyzeCategoryItems)
-                LazyColumn(
-                    modifier = Modifier
-                        .padding(start = 26.dp, end = 26.dp, bottom = 26.dp)
-                ) {
-                    items(analyzeCatDataState.analyzeCategoryList, key = { it.id }) {
-                        AnalyzeCategoryCardItem(
-                            category = it,
-                            onSelectChange = analyzeCatDataState::onItemSelected
-                        )
-                    }
-                }
-            }
+            currentBottomSheetContent?.invoke()
         }
     ) {
         Scaffold { _ ->
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+            ) {
                 CameraPreviewScreen(controller, Modifier.fillMaxSize())
                 LineAnalyzer(
                     modifier = Modifier
@@ -202,8 +205,11 @@ fun AnalyzeScreen(controller: LifecycleCameraController) {
                             .fillMaxWidth()
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                             .clickable(onClick = {
-                                coroutineScope.launch {
-                                    modalSheetState.show()
+                                currentBottomSheetContent = {
+                                    AnalyzeSelector(coroutineScope, modalSheetState)
+                                    coroutineScope.launch {
+                                        modalSheetState.show()
+                                    }
                                 }
                             })
                     ) {
@@ -227,7 +233,17 @@ fun AnalyzeScreen(controller: LifecycleCameraController) {
                         shape = CircleShape,
                         contentColor = Color.Black,
                         containerColor = colorResource(id = R.color.light_green),
-                        onClick = {},
+                        onClick = {
+//                            val image = R.drawable.disease_sample1
+//                            val bitmap = BitmapFactory.decodeResource(context.resources, image)
+                            takePictureToBitmap(context, controller) { bitmap ->
+                                if (bitmap != null) {
+                                    // Just keep in variable / send to ViewModel
+                                    viewModel.analyzeImage(bitmap)
+                                }
+                            }
+//                            analyzeImage()
+                        },
                         modifier = Modifier
                             .padding(bottom = 40.dp)
                             .constrainAs(analyzeBtn) {
@@ -243,7 +259,178 @@ fun AnalyzeScreen(controller: LifecycleCameraController) {
                         )
                     }
                 }
+
+                when(val state = state.apiResp) {
+                    is UiState.Loading -> {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .background(color = Color.White, shape = RoundedCornerShape(20.dp))
+                                .padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = colorResource(id = R.color.light_green)
+                            )
+                            Text(
+                                modifier = Modifier
+                                    .padding(top = 8.dp),
+                                text = "Analyzing...",
+                                fontFamily = poppins_medium,
+                                fontSize = 20.sp,
+                                color = Color.Black
+                            )
+                        }
+                    }
+                    is UiState.Success -> {
+                        currentBottomSheetContent = {
+                            AnalyzeResultDetail(
+                                modalSheetState = modalSheetState,
+                                coroutineScope = coroutineScope,
+                                state = state.data ?: DiseaseResult()
+                            )
+                            LaunchedEffect(state.data) {
+                                modalSheetState.show()
+                            }
+                        }
+                    }
+                    is UiState.Error -> {
+                        println("ERROR -> ${state.message}")
+                    }
+                    else -> {
+
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun AnalyzeSelector(
+    coroutineScope: CoroutineScope,
+    modalSheetState: ModalBottomSheetState
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(26.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Analyze For",
+                fontFamily = poppins_medium,
+                fontSize = 20.sp,
+                color = Color.Black
+            )
+            Icon(
+                imageVector = Icons.Filled.Close,
+                tint = Color.Black,
+                contentDescription = "Close Icon",
+                modifier = Modifier
+                    .clickable {
+                        coroutineScope.launch {
+                            modalSheetState.hide()
+                        }
+                    }
+            )
+        }
+
+        val analyzeCatDataState = remember {
+            AnalyzeCategoryItemDataState()
+        }
+        analyzeCatDataState.setAnalyzeCatList(analyzeCategoryItems)
+        LazyColumn(
+            modifier = Modifier
+                .padding(start = 26.dp, end = 26.dp, bottom = 26.dp)
+        ) {
+            items(analyzeCatDataState.analyzeCategoryList, key = { it.id }) {
+                AnalyzeCategoryCardItem(
+                    category = it,
+                    onSelectChange = analyzeCatDataState::onItemSelected
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AnalyzeResultDetail(state: DiseaseResult, modalSheetState: ModalBottomSheetState, coroutineScope: CoroutineScope) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .padding(top = 52.dp, end = 26.dp, bottom = 26.dp, start = 26.dp)
+            .verticalScroll(scrollState)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Analyze Report",
+                fontFamily = poppins_medium,
+                fontSize = 20.sp,
+                color = Color.Black
+            )
+            Icon(
+                imageVector = Icons.Filled.Close,
+                tint = Color.Black,
+                contentDescription = "Close Icon",
+                modifier = Modifier
+                    .clickable {
+                        coroutineScope.launch {
+                            modalSheetState.hide()
+                        }
+                    }
+            )
+        }
+        Divider()
+        Spacer(modifier = Modifier.height(50.dp))
+        Column {
+            Text(
+                "Disease Name :",
+                fontFamily = poppins_bold,
+                fontSize = 20.sp,
+            )
+            Text(
+                state.diseaseName,
+                fontFamily = poppins_regular,
+                fontSize = 14.sp,
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        Column {
+            Text(
+                "Description :",
+                fontFamily = poppins_bold,
+                fontSize = 20.sp,
+            )
+            Text(
+                state.description,
+                fontFamily = poppins_regular,
+                fontSize = 14.sp,
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        Column {
+            Text(
+                "Treatment :",
+                fontFamily = poppins_bold,
+                fontSize = 20.sp,
+            )
+            Text(
+                state.treatment,
+                fontFamily = poppins_regular,
+                fontSize = 14.sp,
+            )
         }
     }
 }
@@ -264,6 +451,27 @@ fun CameraPreviewScreen(
         },
         modifier = modifier
     )
+}
+
+fun takePictureToBitmap(
+    context: Context,
+    controller: LifecycleCameraController,
+    onResult: (Bitmap?) -> Unit
+) {
+    val executor = ContextCompat.getMainExecutor(context)
+
+    controller.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
+        override fun onCaptureSuccess(imageProxy: ImageProxy) {
+            val bitmap = imageProxy.toBitmap()
+            onResult(bitmap)
+            imageProxy.close() // Important: close the image to free resources
+        }
+
+        override fun onError(exception: ImageCaptureException) {
+            exception.printStackTrace()
+            onResult(null)
+        }
+    })
 }
 
 @Composable

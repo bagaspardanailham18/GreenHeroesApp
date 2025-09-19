@@ -60,17 +60,10 @@ import kotlinx.coroutines.launch
 import org.koin.android.scope.AndroidScopeComponent
 import org.koin.androidx.scope.activityScope
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.scope.Scope
 
-class MainActivity : ComponentActivity(), AndroidScopeComponent {
-
-    override val scope: Scope by activityScope()
-
-    init {
-        injectContentInActivityKoin()
-    }
-
-    private val shopViewModel: ShopVM by viewModel()
+class MainActivity : ComponentActivity() {
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -189,7 +182,7 @@ class MainActivity : ComponentActivity(), AndroidScopeComponent {
                             HomeNavHost(homeNavController)
                         }
                         composable("shop") {
-                            ShopNavHost(shopViewModel)
+                            ShopNavHost()
                         }
                         composable("analyze") {
                             AnalyzeNavHost()
@@ -226,7 +219,7 @@ fun HomeNavHost(
 
 @Composable
 fun ShopNavHost(
-    shopVM: ShopVM
+    shopVM: ShopVM = koinViewModel()
 ) {
     ShopScreen(shopVM)
 }
@@ -244,7 +237,9 @@ fun AnalyzeNavHost() {
             val context = LocalContext.current.applicationContext
             val controller = remember {
                 LifecycleCameraController(context).apply {
-                    setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
+                    setEnabledUseCases(
+                        CameraController.IMAGE_CAPTURE
+                    )
 //                    setImageAnalysisAnalyzer(
 //                        ContextCompat.getMainExecutor(context),
 //                        analyzer

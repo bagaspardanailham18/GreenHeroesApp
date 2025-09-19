@@ -2,16 +2,18 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.gms)
 }
 
 android {
     namespace = "com.bagaspardanailham.greenheroesapp"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.bagaspardanailham.greenheroesapp"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -122,4 +124,9 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.core)
     implementation(libs.koin.compose)
+    implementation(libs.koin.compose.viewmodel)
+
+    // Gemini
+    implementation(platform(libs.firebase.bom))
+    implementation("com.google.firebase:firebase-ai")
 }
